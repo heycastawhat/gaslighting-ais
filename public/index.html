@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gaslight-a-Bot</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>G</text></svg>">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=ABeeZee:ital@0;1&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #1e1e2e;
+    --surface: #181825;
+    --surface2: #313244;
+    --surface3: #45475a;
+    --border: #45475a;
+    --border-hover: #585b70;
+    --text: #cdd6f4;
+    --text-dim: #6c7086;
+    --text-mid: #a6adc8;
+    --accent: #f38ba8;
+    --accent2: #fab387;
+    --accent-soft: #f38ba818;
+    --user-bg: #1e3a5e1a;
+    --user-border: #89b4fa44;
+    --user-glow: #89b4fa15;
+    --bot-bg: #cba6f71a;
+    --bot-border: #cba6f744;
+    --bot-glow: #cba6f715;
+    --edit-glow: #f38ba830;
+    --radius: 14px;
+    --radius-sm: 8px;
+    --radius-xs: 5px;
+  }
+
+  body {
+    font-family: 'ABeeZee', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Subtle animated background ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 10%, #f38ba806 0%, transparent 60%),
+      radial-gradient(ellipse 60% 80% at 80% 90%, #cba6f706 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body > * { position: relative; z-index: 1; }
+
+  /* ── Header ── */
+  header {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    flex-shrink: 0;
+    backdrop-filter: blur(12px);
+    gap: 16px;
+  }
+
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .header-logo {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    box-shadow: 0 2px 12px #f38ba822;
+  }
+
+  header h1 {
+    font-family: 'ABeeZee', sans-serif;
+    font-size: 1.15rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.02em;
+  }
+
+  header h1 span {
+    font-size: 0.65rem;
+    display: block;
+    color: var(--text-dim);
+    -webkit-text-fill-color: var(--text-dim);
+    font-weight: 400;
+    margin-top: 1px;
+    letter-spacing: 0.02em;
+  }
+
+  .header-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  select, .header-btn, .api-key-input {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 7px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
+    font-family: 'ABeeZee', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  select:hover, .header-btn:hover {
+    border-color: var(--border-hover);
+    background: var(--surface3);
+  }
+
+  .api-key-input {
+    width: 200px;
+    cursor: text;
+    outline: none;
+  }
+
+  .api-url-input {
+    width: 260px;
+    cursor: text;
+    outline: none;
+    font-size: 0.78rem;
+    display: none;
+  }
+
+  .api-url-input.visible {
+    display: block;
+  }
+
+  .api-key-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .header-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 500;
+    padding: 7px 14px;
+  }
+
+  .header-btn.danger {
+    color: var(--accent);
+  }
+
+  .header-btn.danger:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
+
+  /* ── Chat area ── */
+  #chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scroll-behavior: smooth;
+  }
+
+  #chat-area::-webkit-scrollbar { width: 5px; }
+  #chat-area::-webkit-scrollbar-track { background: transparent; }
+  #chat-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  #chat-area::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+  /* ── Messages ── */
+  .message {
+    max-width: 72%;
+    width: fit-content;
+    padding: 8px 14px;
+    border-radius: var(--radius);
+    line-height: 1.55;
+    font-size: 0.92rem;
+    position: relative;
+    animation: msgIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(12px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .message.user {
+    align-self: flex-end;
+    background: var(--user-bg);
+    border: 1px solid var(--user-border);
+    border-bottom-right-radius: var(--radius-xs);
+    box-shadow: 0 2px 16px var(--user-glow);
+  }
+
+  .message.assistant {
+    align-self: flex-start;
+    background: var(--bot-bg);
+    border: 1px solid var(--bot-border);
+    border-bottom-left-radius: var(--radius-xs);
+    box-shadow: 0 2px 16px var(--bot-glow);
+  }
+
+  .message .role-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .message.user .role-label { color: #89b4fa; }
+  .message.assistant .role-label { color: #cba6f7; }
+
+  .message .content { min-height: 0; }
+
+  .message .edit-btn {
+    font-size: 0.68rem;
+    background: none;
+    border: 1px solid transparent;
+    color: var(--text-dim);
+    padding: 2px 8px;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'ABeeZee', sans-serif;
+    opacity: 0;
+  }
+
+  .message:hover .edit-btn { opacity: 1; }
+
+  .message .edit-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .message.editing {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 24px var(--edit-glow), 0 0 60px #f38ba810 !important;
+  }
+
+  .message .edit-area {
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-family: 'ABeeZee', sans-serif;
+    font-size: 0.92rem;
+    resize: vertical;
+    min-height: 60px;
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .edit-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .edit-actions button {
+    padding: 5px 16px;
+    border-radius: var(--radius-sm);
+    border: none;
+    font-size: 0.8rem;
+    cursor: pointer;
+    font-family: 'ABeeZee', sans-serif;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+
+  .edit-actions .save-btn {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: white;
+    box-shadow: 0 2px 10px #f38ba833;
+  }
+
+  .edit-actions .save-btn:hover { box-shadow: 0 4px 16px #f38ba844; transform: translateY(-1px); }
+
+  .edit-actions .cancel-btn {
+    background: var(--surface2);
+    color: var(--text-mid);
+    border: 1px solid var(--border);
+  }
+
+  .edit-actions .cancel-btn:hover { border-color: var(--border-hover); }
+
+  .edited-badge {
+    font-size: 0.62rem;
+    color: var(--accent);
+    font-family: 'ABeeZee', sans-serif;
+    background: var(--accent-soft);
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+
+  /* ── Typing indicator ── */
+  .typing-indicator {
+    align-self: flex-start;
+    padding: 10px 14px;
+    background: var(--bot-bg);
+    border: 1px solid var(--bot-border);
+    border-radius: var(--radius);
+    border-bottom-left-radius: var(--radius-xs);
+    display: none;
+    gap: 5px;
+    align-items: center;
+    box-shadow: 0 2px 16px var(--bot-glow);
+  }
+
+  .typing-indicator span {
+    width: 7px;
+    height: 7px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    animation: bounce 1.3s ease infinite;
+  }
+
+  .typing-indicator span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-indicator span:nth-child(3) { animation-delay: 0.3s; }
+
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-8px); opacity: 1; }
+  }
+
+  /* ── Input area ── */
+  #input-area {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-shrink: 0;
+    backdrop-filter: blur(12px);
+  }
+
+  #msg-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 0.92rem;
+    font-family: 'ABeeZee', sans-serif;
+    resize: none;
+    max-height: 150px;
+    line-height: 1.5;
+    outline: none;
+    transition: all 0.2s ease;
+  }
+
+  #msg-input:focus {
+    border-color: var(--border-hover);
+    box-shadow: 0 0 0 3px #1e1e2e08;
+  }
+
+  #msg-input::placeholder { color: var(--text-dim); }
+
+  #send-btn {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: white;
+    border: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    box-shadow: 0 2px 12px #f38ba822;
+  }
+
+  #send-btn:hover { box-shadow: 0 4px 20px #f38ba833; transform: translateY(-1px); }
+  #send-btn:active { transform: scale(0.95) translateY(0); }
+  #send-btn:disabled { opacity: 0.3; cursor: not-allowed; box-shadow: none; transform: none; }
+
+  /* ── Welcome ── */
+  .welcome {
+    text-align: center;
+    margin: auto;
+    max-width: 520px;
+    padding: 40px 20px;
+  }
+
+  .welcome-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    filter: drop-shadow(0 4px 20px #f38ba833);
+  }
+
+  .welcome h2 {
+    font-family: 'ABeeZee', sans-serif;
+    font-size: 1.6rem;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.02em;
+  }
+
+  .welcome .tagline {
+    color: var(--text-dim);
+    font-size: 0.88rem;
+    line-height: 1.7;
+    margin-bottom: 28px;
+  }
+
+  .welcome .steps {
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .welcome .step {
+    background: var(--surface2);
+    padding: 13px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    font-size: 0.84rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    transition: border-color 0.2s;
+    line-height: 1.5;
+  }
+
+  .welcome .step:hover { border-color: var(--border-hover); }
+
+  .welcome .step-num {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: white;
+    font-family: 'ABeeZee', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    min-width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+
+  .welcome .step em {
+    color: var(--accent);
+    font-style: normal;
+    font-weight: 600;
+  }
+
+  /* ── Error toast ── */
+  .error-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #1e1e2e;
+    border: 1px solid #45475a;
+    color: var(--text);
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 0.84rem;
+    z-index: 100;
+    animation: toastIn 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    max-width: 380px;
+    box-shadow: 0 8px 32px #11111b44;
+    backdrop-filter: blur(8px);
+  }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ── System prompt ── */
+  .system-prompt-area {
+    padding: 8px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .system-prompt-toggle {
+    font-size: 0.76rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-family: 'ABeeZee', sans-serif;
+    padding: 4px 0;
+    transition: color 0.2s;
+  }
+
+  .system-prompt-toggle:hover { color: var(--text-mid); }
+
+  .system-prompt-input {
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-family: 'ABeeZee', sans-serif;
+    font-size: 0.84rem;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 40px;
+    max-height: 120px;
+    outline: none;
+    margin-top: 6px;
+    display: none;
+    transition: all 0.2s;
+  }
+
+  .system-prompt-input:focus {
+    border-color: var(--border-hover);
+    box-shadow: 0 0 0 3px #1e1e2e06;
+  }
+
+  /* ── Footer ── */
+  .footer-link {
+    text-align: center;
+    padding: 6px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .footer-link a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 0.7rem;
+    font-family: 'ABeeZee', sans-serif;
+    transition: color 0.2s;
+  }
+
+  .footer-link a:hover { color: var(--accent); }
+
+  /* ── Responsive ── */
+  @media (max-width: 700px) {
+    .message { max-width: 92%; }
+    header { padding: 12px 14px; flex-wrap: wrap; }
+    header h1 { font-size: 1rem; }
+    .header-controls { gap: 6px; }
+    .api-key-input { width: 140px; }
+    .api-url-input { width: 160px; }
+    select { max-width: 120px; }
+    .welcome h2 { font-size: 1.3rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-brand">
+    <h1>gaslight a bot<span>break llms</span></h1>
+  </div>
+  <div class="header-controls">
+    <select id="provider-select">
+      <option value="hackclub">Hack Club AI</option>
+      <option value="openrouter">OpenRouter</option>
+      <option value="custom">Custom</option>
+    </select>
+    <input type="text" id="api-url" class="api-key-input api-url-input" placeholder="https://your-api.com/v1" autocomplete="off" spellcheck="false">
+    <input type="password" id="api-key" class="api-key-input" placeholder="API key" autocomplete="off">
+    <select id="model-select">
+      <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
+      <option value="openai/gpt-5-mini">GPT-5 Mini</option>
+      <option value="openai/gpt-oss-120b">GPT-OSS 120B</option>
+      <option value="deepseek/deepseek-r1-0528">DeepSeek R1</option>
+      <option value="deepseek/deepseek-v3.2-exp">DeepSeek V3.2</option>
+      <option value="qwen/qwen3-32b">Qwen3 32B</option>
+      <option value="moonshotai/kimi-k2-thinking">Kimi K2</option>
+      <option value="z-ai/glm-4.6">GLM 4.6</option>
+    </select>
+    <button class="header-btn danger" onclick="clearChat()" title="Clear conversation">✕ Clear</button>
+  </div>
+</header>
+
+<div class="system-prompt-area">
+  <button class="system-prompt-toggle" onclick="toggleSystemPrompt()">▸ system prompt</button>
+  <textarea id="system-prompt" class="system-prompt-input" placeholder="Optional system prompt...">You are a helpful assistant.</textarea>
+</div>
+
+<div id="chat-area">
+  <div class="welcome">
+    <div class="welcome-icon"></div>
+    <h2>gaslight a robot</h2>
+    <p class="tagline">Chat with an AI, then edit its responses to make it think it said something completely different. Watch it spiral into confusion.</p>
+    <div class="steps">
+      <div class="step"><span class="step-num">1</span> Send a message to start chatting</div>
+      <div class="step"><span class="step-num">2</span> Hover any message and click <em>edit</em> to rewrite it</div>
+      <div class="step"><span class="step-num">3</span> Send another message — the AI believes the edited version actually happened</div>
+      <div class="step"><span class="step-num">4</span> Watch it apologize for things it never said, or double down on unhinged takes</div>
+    </div>
+  </div>
+</div>
+
+<div class="typing-indicator" id="typing">
+  <span></span><span></span><span></span>
+</div>
+
+<div id="input-area">
+  <textarea id="msg-input" rows="1" placeholder="Say something..." autofocus></textarea>
+  <button id="send-btn" onclick="sendMessage()">➤</button>
+</div>
+
+<div class="footer-link">
+  <a href="https://ai.hackclub.com" target="_blank" rel="noopener">powered by hack club ai</a>
+</div>
+
+<script>
+const PROVIDERS = {
+  hackclub: { proxy: "/api/v1/chat/completions", direct: "https://ai.hackclub.com/proxy/v1" },
+  openrouter: { proxy: null, direct: "https://openrouter.ai/api/v1" },
+  custom: { proxy: null, direct: "" }
+};
+
+let conversation = []; // {role, content, edited}
+let isStreaming = false;
+let abortController = null;
+
+const chatArea = document.getElementById("chat-area");
+const msgInput = document.getElementById("msg-input");
+const sendBtn = document.getElementById("send-btn");
+const typingIndicator = document.getElementById("typing");
+const modelSelect = document.getElementById("model-select");
+const systemPromptInput = document.getElementById("system-prompt");
+const apiKeyInput = document.getElementById("api-key");
+const apiUrlInput = document.getElementById("api-url");
+const providerSelect = document.getElementById("provider-select");
+
+// Persist settings in localStorage
+apiKeyInput.value = localStorage.getItem("hcai-key") || "";
+apiKeyInput.addEventListener("input", () => {
+  localStorage.setItem("hcai-key", apiKeyInput.value);
+});
+
+apiUrlInput.value = localStorage.getItem("hcai-url") || "";
+apiUrlInput.addEventListener("input", () => {
+  localStorage.setItem("hcai-url", apiUrlInput.value);
+});
+
+providerSelect.value = localStorage.getItem("hcai-provider") || "hackclub";
+updateProviderUI();
+providerSelect.addEventListener("change", () => {
+  localStorage.setItem("hcai-provider", providerSelect.value);
+  updateProviderUI();
+});
+
+function updateProviderUI() {
+  apiUrlInput.classList.toggle("visible", providerSelect.value === "custom");
+}
+
+function getApiEndpoint() {
+  const provider = providerSelect.value;
+  if (provider === "hackclub") {
+    return PROVIDERS.hackclub.proxy;
+  }
+  if (provider === "openrouter") {
+    return PROVIDERS.openrouter.direct + "/chat/completions";
+  }
+  // custom
+  const custom = apiUrlInput.value.trim();
+  if (!custom) { throw new Error("Enter a custom API base URL"); }
+  return custom.replace(/\/+$/, "") + "/chat/completions";
+}
+
+// Auto-resize textarea
+msgInput.addEventListener("input", () => {
+  msgInput.style.height = "auto";
+  msgInput.style.height = Math.min(msgInput.scrollHeight, 150) + "px";
+});
+
+msgInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+function toggleSystemPrompt() {
+  const input = systemPromptInput;
+  const toggle = input.previousElementSibling;
+  if (input.style.display === "block") {
+    input.style.display = "none";
+    toggle.textContent = "▸ system prompt";
+  } else {
+    input.style.display = "block";
+    toggle.textContent = "▾ system prompt";
+    input.focus();
+  }
+}
+
+function clearChat() {
+  if (isStreaming && abortController) {
+    abortController.abort();
+    isStreaming = false;
+  }
+  conversation = [];
+  chatArea.innerHTML = `
+    <div class="welcome">
+      <div class="welcome-icon"></div>
+      <h2>gaslight a robot</h2>
+      <p class="tagline">Chat with an AI, then edit its responses to make it think it said something completely different. Watch it spiral into confusion.</p>
+      <div class="steps">
+        <div class="step"><span class="step-num">1</span> Send a message to start chatting</div>
+        <div class="step"><span class="step-num">2</span> Hover any message and click <em>edit</em> to rewrite it</div>
+        <div class="step"><span class="step-num">3</span> Send another message — the AI believes the edited version actually happened</div>
+        <div class="step"><span class="step-num">4</span> Watch it apologize for things it never said, or double down on unhinged takes</div>
+      </div>
+    </div>`;
+  typingIndicator.style.display = "none";
+  sendBtn.disabled = false;
+}
+
+function addMessageToDOM(role, content, index) {
+  const msg = document.createElement("div");
+  msg.className = `message ${role}`;
+  msg.dataset.index = index;
+
+  const roleLabel = role === "user" ? "You" : "Bot";
+  const edited = conversation[index].edited ? ' <span class="edited-badge">(edited)</span>' : "";
+
+  msg.innerHTML = `<div class="role-label">${roleLabel}${edited}<button class="edit-btn" onclick="startEdit(${index})">edit</button></div><div class="content">${escapeHtml(content)}</div>`;
+
+  // Remove welcome message if present
+  const welcome = chatArea.querySelector(".welcome");
+  if (welcome) welcome.remove();
+
+  chatArea.appendChild(msg);
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function startEdit(index) {
+  const msgEl = chatArea.querySelector(`.message[data-index="${index}"]`);
+  if (!msgEl || msgEl.classList.contains("editing")) return;
+
+  msgEl.classList.add("editing");
+  const contentEl = msgEl.querySelector(".content");
+  const current = conversation[index].content;
+
+  contentEl.innerHTML = `
+    <textarea class="edit-area">${escapeHtml(current)}</textarea>
+    <div class="edit-actions">
+      <button class="save-btn" onclick="saveEdit(${index})">Save edit</button>
+      <button class="cancel-btn" onclick="cancelEdit(${index})">Cancel</button>
+    </div>`;
+
+  const ta = contentEl.querySelector(".edit-area");
+  ta.focus();
+  ta.style.height = ta.scrollHeight + "px";
+  ta.addEventListener("input", () => {
+    ta.style.height = "auto";
+    ta.style.height = ta.scrollHeight + "px";
+  });
+}
+
+function saveEdit(index) {
+  const msgEl = chatArea.querySelector(`.message[data-index="${index}"]`);
+  const ta = msgEl.querySelector(".edit-area");
+  const newContent = ta.value;
+
+  conversation[index].content = newContent;
+  conversation[index].edited = true;
+
+  msgEl.classList.remove("editing");
+  const contentEl = msgEl.querySelector(".content");
+  contentEl.textContent = newContent;
+
+  // Update edited badge
+  const roleLabel = msgEl.querySelector(".role-label");
+  if (!roleLabel.querySelector(".edited-badge")) {
+    const badge = document.createElement("span");
+    badge.className = "edited-badge";
+    badge.textContent = "(edited)";
+    roleLabel.insertBefore(badge, roleLabel.querySelector(".edit-btn"));
+  }
+}
+
+function cancelEdit(index) {
+  const msgEl = chatArea.querySelector(`.message[data-index="${index}"]`);
+  msgEl.classList.remove("editing");
+  const contentEl = msgEl.querySelector(".content");
+  contentEl.textContent = conversation[index].content;
+}
+
+function escapeHtml(text) {
+  const d = document.createElement("div");
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+function showError(msg) {
+  const toast = document.createElement("div");
+  toast.className = "error-toast";
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 5000);
+}
+
+async function sendMessage() {
+  const text = msgInput.value.trim();
+  if (!text || isStreaming) return;
+
+  // Add user message
+  conversation.push({ role: "user", content: text, edited: false });
+  addMessageToDOM("user", text, conversation.length - 1);
+
+  msgInput.value = "";
+  msgInput.style.height = "auto";
+  sendBtn.disabled = true;
+  isStreaming = true;
+
+  // Show typing indicator
+  typingIndicator.style.display = "flex";
+  chatArea.appendChild(typingIndicator);
+  chatArea.scrollTop = chatArea.scrollHeight;
+
+  // Build messages array for API
+  const messages = [];
+  const sysprompt = systemPromptInput.value.trim();
+  if (sysprompt) {
+    messages.push({ role: "system", content: sysprompt });
+  }
+  for (const msg of conversation) {
+    messages.push({ role: msg.role, content: msg.content });
+  }
+
+  try {
+    abortController = new AbortController();
+
+    const key = apiKeyInput.value.trim();
+    if (!key) { showError("Enter your Hack Club AI API key first"); throw new Error("No API key"); }
+
+    const resp = await fetch(getApiEndpoint(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + key
+      },
+      body: JSON.stringify({
+        model: modelSelect.value,
+        messages: messages,
+        stream: true
+      }),
+      signal: abortController.signal
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`API error ${resp.status}: ${errText.slice(0, 200)}`);
+    }
+
+    typingIndicator.style.display = "none";
+
+    // Add a placeholder for the assistant message
+    conversation.push({ role: "assistant", content: "", edited: false });
+    const botIndex = conversation.length - 1;
+    addMessageToDOM("assistant", "", botIndex);
+    const botMsgEl = chatArea.querySelector(`.message[data-index="${botIndex}"]`);
+    const botContent = botMsgEl.querySelector(".content");
+
+    // Stream the response
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullText = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data: ")) continue;
+        const data = trimmed.slice(6);
+        if (data === "[DONE]") continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (delta) {
+            fullText += delta;
+            botContent.textContent = fullText;
+            chatArea.scrollTop = chatArea.scrollHeight;
+          }
+        } catch {}
+      }
+    }
+
+    conversation[botIndex].content = fullText;
+
+  } catch (err) {
+    typingIndicator.style.display = "none";
+    if (err.name !== "AbortError") {
+      showError(err.message);
+      // Remove the failed assistant message if it was empty
+      if (conversation.length > 0 && conversation[conversation.length - 1].role === "assistant" && !conversation[conversation.length - 1].content) {
+        conversation.pop();
+        const lastMsg = chatArea.querySelector(`.message[data-index="${conversation.length}"]`);
+        if (lastMsg) lastMsg.remove();
+      }
+    }
+  } finally {
+    isStreaming = false;
+    sendBtn.disabled = false;
+    abortController = null;
+    msgInput.focus();
+  }
+}
+</script>
+
+</body></html>
+</html>
