@@ -1,8 +1,10 @@
 const https = require("https");
 
 module.exports = (req, res) => {
-  // Strip "/api/" prefix to get the downstream path
-  const targetPath = "/proxy/" + req.url.replace(/^\/api\//, "");
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    return res.end();
+  }
 
   const chunks = [];
   req.on("data", (c) => chunks.push(c));
@@ -12,10 +14,10 @@ module.exports = (req, res) => {
     const opts = {
       hostname: "ai.hackclub.com",
       port: 443,
-      path: targetPath,
-      method: req.method,
+      path: "/proxy/v1/chat/completions",
+      method: "POST",
       headers: {
-        "content-type": req.headers["content-type"] || "application/json",
+        "content-type": "application/json",
         ...(req.headers["authorization"] && { authorization: req.headers["authorization"] }),
       },
     };

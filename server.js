@@ -15,8 +15,8 @@ const MIME = {
 
 const server = http.createServer((req, res) => {
   // Proxy API requests
-  if (req.url.startsWith("/api/")) {
-    const targetPath = "/proxy/" + req.url.slice(5);
+  if (req.url === "/api/chat") {
+    const targetPath = "/proxy/v1/chat/completions";
     const chunks = [];
 
     req.on("data", (c) => chunks.push(c));

@@ -1,9 +1,6 @@
 {
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/:path*" }
-  ],
   "functions": {
-    "api/[...path].js": {
+    "api/chat.js": {
       "maxDuration": 60
     }
   }
