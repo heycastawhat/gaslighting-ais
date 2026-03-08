@@ -576,6 +576,56 @@
 
   .footer-link a:hover { color: var(--accent); }
 
+  /* ── Share toast ── */
+  .share-toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    color: var(--text);
+    padding: 12px 24px;
+    border-radius: var(--radius-sm);
+    font-size: 0.84rem;
+    z-index: 100;
+    animation: toastIn 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: 0 8px 32px #11111b44, 0 0 0 3px var(--accent-soft);
+    font-family: 'ABeeZee', sans-serif;
+  }
+
+  .shared-banner {
+    text-align: center;
+    padding: 8px 16px;
+    background: var(--accent-soft);
+    border-bottom: 1px solid var(--accent);
+    font-size: 0.78rem;
+    color: var(--accent);
+    font-family: 'ABeeZee', sans-serif;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .shared-banner button {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    border-radius: var(--radius-xs);
+    font-size: 0.76rem;
+    cursor: pointer;
+    font-family: 'ABeeZee', sans-serif;
+    transition: all 0.2s;
+  }
+
+  .shared-banner button:hover {
+    border-color: var(--border-hover);
+    background: var(--surface3);
+  }
+
   /* ── Responsive ── */
   @media (max-width: 700px) {
     .message { max-width: 92%; }
@@ -613,6 +663,7 @@
       <option value="moonshotai/kimi-k2-thinking">Kimi K2</option>
       <option value="z-ai/glm-4.6">GLM 4.6</option>
     </select>
+    <button class="header-btn" onclick="shareChat()" title="Share conversation">⤴ Share</button>
     <button class="header-btn danger" onclick="clearChat()" title="Clear conversation">✕ Clear</button>
   </div>
 </header>
@@ -650,6 +701,19 @@
 </div>
 
 <script>
+// ── Share / load logic ──
+(function loadSharedChat() {
+  const hash = window.location.hash.slice(1);
+  if (!hash) return;
+  try {
+    const json = decodeURIComponent(atob(hash));
+    const data = JSON.parse(json);
+    if (!Array.isArray(data.messages)) return;
+    // defer until DOM and variables ready
+    window._sharedData = data;
+  } catch {}
+})();
+
 const PROVIDERS = {
   hackclub: { proxy: "/api/chat", direct: "https://ai.hackclub.com/proxy/v1" },
   openrouter: { proxy: null, direct: "https://openrouter.ai/api/v1" },
@@ -704,6 +768,62 @@ function getApiEndpoint() {
   const custom = apiUrlInput.value.trim();
   if (!custom) { throw new Error("Enter a custom API base URL"); }
   return custom.replace(/\/+$/, "") + "/chat/completions";
+}
+
+// Load a shared chat if present in URL hash
+if (window._sharedData) {
+  const data = window._sharedData;
+  delete window._sharedData;
+  conversation = data.messages.map(m => ({ role: m.role, content: m.content, edited: !!m.edited }));
+  if (data.system) systemPromptInput.value = data.system;
+  // render messages
+  const welcome = chatArea.querySelector(".welcome");
+  if (welcome) welcome.remove();
+  conversation.forEach((m, i) => addMessageToDOM(m.role, m.content, i));
+  // show shared banner
+  const banner = document.createElement("div");
+  banner.className = "shared-banner";
+  banner.innerHTML = 'Viewing a shared conversation <button onclick="this.parentElement.remove(); window.history.replaceState(null, \'\', window.location.pathname)">Dismiss</button>';
+  document.body.insertBefore(banner, document.body.children[1]);
+  // clear hash without reload
+  window.history.replaceState(null, '', window.location.pathname);
+}
+
+function shareChat() {
+  if (conversation.length === 0) {
+    showError("Nothing to share yet — send a message first");
+    return;
+  }
+  const data = {
+    messages: conversation.map(m => ({ role: m.role, content: m.content, ...(m.edited ? { edited: true } : {}) })),
+    system: systemPromptInput.value.trim() || undefined
+  };
+  const encoded = btoa(encodeURIComponent(JSON.stringify(data)));
+  const url = window.location.origin + window.location.pathname + "#" + encoded;
+
+  if (url.length > 100000) {
+    // Too long for URL — copy as plain text instead
+    const text = conversation.map(m => `${m.role === "user" ? "You" : "Bot"}${m.edited ? " (edited)" : ""}: ${m.content}`).join("\n\n");
+    navigator.clipboard.writeText(text).then(() => {
+      showShareToast("Chat too long for URL — copied as text instead");
+    });
+    return;
+  }
+
+  navigator.clipboard.writeText(url).then(() => {
+    showShareToast("Share link copied to clipboard!");
+  }).catch(() => {
+    // Fallback: select a prompt
+    prompt("Copy this share link:", url);
+  });
+}
+
+function showShareToast(msg) {
+  const toast = document.createElement("div");
+  toast.className = "share-toast";
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
 }
 
 // Auto-resize textarea
