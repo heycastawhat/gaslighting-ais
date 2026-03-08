@@ -701,17 +701,67 @@
 </div>
 
 <script>
+// ── Compression helpers ──
+async function compressJson(obj) {
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  const cs = new CompressionStream('deflate-raw');
+  const writer = cs.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  const chunks = [];
+  const reader = cs.readable.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  const compressed = new Uint8Array(chunks.reduce((a, c) => a + c.length, 0));
+  let offset = 0;
+  for (const c of chunks) { compressed.set(c, offset); offset += c.length; }
+  // URL-safe base64
+  let b64 = btoa(String.fromCharCode(...compressed));
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function decompressJson(str) {
+  // Restore standard base64
+  let b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  const binary = atob(b64);
+  const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+  const ds = new DecompressionStream('deflate-raw');
+  const writer = ds.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  const chunks = [];
+  const reader = ds.readable.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  const decompressed = new Uint8Array(chunks.reduce((a, c) => a + c.length, 0));
+  let offset = 0;
+  for (const c of chunks) { decompressed.set(c, offset); offset += c.length; }
+  return JSON.parse(new TextDecoder().decode(decompressed));
+}
+
 // ── Share / load logic ──
 (function loadSharedChat() {
   const hash = window.location.hash.slice(1);
   if (!hash) return;
-  try {
-    const json = decodeURIComponent(atob(hash));
-    const data = JSON.parse(json);
-    if (!Array.isArray(data.messages)) return;
-    // defer until DOM and variables ready
-    window._sharedData = data;
-  } catch {}
+  // Legacy uncompressed format is synchronous
+  if (!hash.startsWith('z.')) {
+    try {
+      const data = JSON.parse(decodeURIComponent(atob(hash)));
+      if (Array.isArray(data.messages)) window._sharedData = data;
+    } catch {}
+    return;
+  }
+  // Compressed format — must await, so we store a promise
+  window._sharedDataPromise = decompressJson(hash.slice(2)).then(data => {
+    if (Array.isArray(data.messages)) return data;
+  }).catch(() => null);
 })();
 
 const PROVIDERS = {
@@ -771,11 +821,15 @@ function getApiEndpoint() {
 }
 
 // Load a shared chat if present in URL hash
-if (window._sharedData) {
-  const data = window._sharedData;
-  delete window._sharedData;
-  conversation = data.messages.map(m => ({ role: m.role, content: m.content, edited: !!m.edited }));
-  if (data.system) systemPromptInput.value = data.system;
+function applySharedData(data) {
+  if (!data || !Array.isArray(data.messages)) return;
+  // Support both compressed short keys (r/c/e/s) and legacy long keys
+  conversation = data.messages.map(m => {
+    if (m.r) return { role: m.r === 'u' ? 'user' : 'assistant', content: m.c, edited: !!m.e };
+    return { role: m.role, content: m.content, edited: !!m.edited };
+  });
+  if (data.s) systemPromptInput.value = data.s;
+  else if (data.system) systemPromptInput.value = data.system;
   // render messages
   const welcome = chatArea.querySelector(".welcome");
   if (welcome) welcome.remove();
@@ -789,33 +843,46 @@ if (window._sharedData) {
   window.history.replaceState(null, '', window.location.pathname);
 }
 
-function shareChat() {
+// Sync path (legacy links)
+if (window._sharedData) {
+  applySharedData(window._sharedData);
+  delete window._sharedData;
+}
+// Async path (compressed links)
+if (window._sharedDataPromise) {
+  window._sharedDataPromise.then(data => {
+    applySharedData(data);
+    delete window._sharedDataPromise;
+  });
+}
+
+async function shareChat() {
   if (conversation.length === 0) {
     showError("Nothing to share yet — send a message first");
     return;
   }
+  // Use short keys to minimize payload
   const data = {
-    messages: conversation.map(m => ({ role: m.role, content: m.content, ...(m.edited ? { edited: true } : {}) })),
-    system: systemPromptInput.value.trim() || undefined
+    messages: conversation.map(m => ({ r: m.role[0], c: m.content, ...(m.edited ? { e: 1 } : {}) })),
+    s: systemPromptInput.value.trim() || undefined
   };
-  const encoded = btoa(encodeURIComponent(JSON.stringify(data)));
-  const url = window.location.origin + window.location.pathname + "#" + encoded;
+  try {
+    const compressed = await compressJson(data);
+    const url = window.location.origin + window.location.pathname + "#z." + compressed;
 
-  if (url.length > 100000) {
-    // Too long for URL — copy as plain text instead
-    const text = conversation.map(m => `${m.role === "user" ? "You" : "Bot"}${m.edited ? " (edited)" : ""}: ${m.content}`).join("\n\n");
-    navigator.clipboard.writeText(text).then(() => {
+    if (url.length > 32000) {
+      // Still too long — copy as plain text instead
+      const text = conversation.map(m => `${m.role === "user" ? "You" : "Bot"}${m.edited ? " (edited)" : ""}: ${m.content}`).join("\n\n");
+      await navigator.clipboard.writeText(text);
       showShareToast("Chat too long for URL — copied as text instead");
-    });
-    return;
-  }
+      return;
+    }
 
-  navigator.clipboard.writeText(url).then(() => {
+    await navigator.clipboard.writeText(url);
     showShareToast("Share link copied to clipboard!");
-  }).catch(() => {
-    // Fallback: select a prompt
-    prompt("Copy this share link:", url);
-  });
+  } catch {
+    showError("Failed to generate share link");
+  }
 }
 
 function showShareToast(msg) {
