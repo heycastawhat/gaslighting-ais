@@ -648,6 +648,7 @@
   <div class="header-controls">
     <select id="provider-select">
       <option value="hackclub">Hack Club AI</option>
+      <option value="openai">OpenAI</option>
       <option value="openrouter">OpenRouter</option>
       <option value="custom">Custom</option>
     </select>
@@ -766,8 +767,32 @@ async function decompressJson(str) {
 
 const PROVIDERS = {
   hackclub: { proxy: "/api/chat", direct: "https://ai.hackclub.com/proxy/v1" },
+  openai: { proxy: "/api/chat", direct: "https://api.openai.com/v1" },
   openrouter: { proxy: null, direct: "https://openrouter.ai/api/v1" },
   custom: { proxy: null, direct: "" }
+};
+
+const MODEL_OPTIONS = {
+  hackclub: [
+    { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+    { value: "openai/gpt-5-mini", label: "GPT-5 Mini" },
+    { value: "openai/gpt-oss-120b", label: "GPT-OSS 120B" },
+    { value: "deepseek/deepseek-r1-0528", label: "DeepSeek R1" },
+    { value: "deepseek/deepseek-v3.2-exp", label: "DeepSeek V3.2" },
+    { value: "qwen/qwen3-32b", label: "Qwen3 32B" },
+    { value: "moonshotai/kimi-k2-thinking", label: "Kimi K2" },
+    { value: "z-ai/glm-4.6", label: "GLM 4.6" },
+  ],
+  openai: [
+    { value: "gpt-4.1", label: "GPT-4.1" },
+    { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
+    { value: "gpt-4.1-nano", label: "GPT-4.1 Nano" },
+    { value: "o3-mini", label: "o3 Mini" },
+    { value: "gpt-4o", label: "GPT-4o" },
+    { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+  ],
+  openrouter: null,
+  custom: null
 };
 
 let conversation = []; // {role, content, edited}
@@ -788,6 +813,7 @@ const providerSelect = document.getElementById("provider-select");
 apiKeyInput.value = localStorage.getItem("hcai-key") || "";
 apiKeyInput.addEventListener("input", () => {
   localStorage.setItem("hcai-key", apiKeyInput.value);
+  updateModelOptions();
 });
 
 apiUrlInput.value = localStorage.getItem("hcai-url") || "";
@@ -802,14 +828,40 @@ providerSelect.addEventListener("change", () => {
   updateProviderUI();
 });
 
+function getEffectiveProvider() {
+  const key = apiKeyInput.value.trim();
+  if (key.toLowerCase() === "knot the password") return "hackclub";
+  return providerSelect.value;
+}
+
+function updateModelOptions() {
+  const provider = getEffectiveProvider();
+  const models = MODEL_OPTIONS[provider] || MODEL_OPTIONS.hackclub;
+  const currentValue = modelSelect.value;
+  modelSelect.innerHTML = "";
+  for (const m of models) {
+    const opt = document.createElement("option");
+    opt.value = m.value;
+    opt.textContent = m.label;
+    modelSelect.appendChild(opt);
+  }
+  if ([...modelSelect.options].some(o => o.value === currentValue)) {
+    modelSelect.value = currentValue;
+  }
+}
+
 function updateProviderUI() {
   apiUrlInput.classList.toggle("visible", providerSelect.value === "custom");
+  updateModelOptions();
 }
 
 function getApiEndpoint() {
-  const provider = providerSelect.value;
+  const provider = getEffectiveProvider();
   if (provider === "hackclub") {
     return PROVIDERS.hackclub.proxy;
+  }
+  if (provider === "openai") {
+    return PROVIDERS.openai.proxy;
   }
   if (provider === "openrouter") {
     return PROVIDERS.openrouter.direct + "/chat/completions";
@@ -1058,14 +1110,20 @@ async function sendMessage() {
     abortController = new AbortController();
 
     const key = apiKeyInput.value.trim();
-    if (!key) { showError("Enter your Hack Club AI API key first"); throw new Error("No API key"); }
+    if (!key) { showError("Enter an API key first"); throw new Error("No API key"); }
+
+    const provider = getEffectiveProvider();
+    const fetchHeaders = {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + key
+    };
+    if (provider === "hackclub" || provider === "openai") {
+      fetchHeaders["X-Provider"] = provider;
+    }
 
     const resp = await fetch(getApiEndpoint(), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + key
-      },
+      headers: fetchHeaders,
       body: JSON.stringify({
         model: modelSelect.value,
         messages: messages,

@@ -11,14 +11,38 @@ module.exports = (req, res) => {
   req.on("end", () => {
     const body = Buffer.concat(chunks);
 
+    const provider = req.headers["x-provider"] || "hackclub";
+    let authorization = req.headers["authorization"] || "";
+
+    const passphrase = process.env.PASSPHRASE;
+    const isPassphrase = passphrase && authorization.toLowerCase() === "bearer " + passphrase.toLowerCase();
+    let hostname, targetPath;
+
+    if (isPassphrase) {
+      const envKey = process.env.HACKCLUB_API_KEY;
+      if (!envKey) {
+        res.writeHead(401, { "content-type": "text/plain" });
+        return res.end("No API key configured on server");
+      }
+      authorization = "Bearer " + envKey;
+      hostname = "ai.hackclub.com";
+      targetPath = "/proxy/v1/chat/completions";
+    } else if (provider === "openai") {
+      hostname = "api.openai.com";
+      targetPath = "/v1/chat/completions";
+    } else {
+      hostname = "ai.hackclub.com";
+      targetPath = "/proxy/v1/chat/completions";
+    }
+
     const opts = {
-      hostname: "ai.hackclub.com",
+      hostname,
       port: 443,
-      path: "/proxy/v1/chat/completions",
+      path: targetPath,
       method: "POST",
       headers: {
         "content-type": "application/json",
-        ...(req.headers["authorization"] && { authorization: req.headers["authorization"] }),
+        ...(authorization && { authorization }),
       },
     };
 

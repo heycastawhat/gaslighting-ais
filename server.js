@@ -23,14 +23,38 @@ const server = http.createServer((req, res) => {
     req.on("end", () => {
       const body = Buffer.concat(chunks);
 
+      const provider = req.headers["x-provider"] || "hackclub";
+      let authorization = req.headers["authorization"] || "";
+
+      const passphrase = process.env.PASSPHRASE;
+      const isPassphrase = passphrase && authorization.toLowerCase() === "bearer " + passphrase.toLowerCase();
+      let proxyHost, proxyPath;
+
+      if (isPassphrase) {
+        const envKey = process.env.HACKCLUB_API_KEY;
+        if (!envKey) {
+          res.writeHead(401, { "content-type": "text/plain" });
+          return res.end("No API key configured on server");
+        }
+        authorization = "Bearer " + envKey;
+        proxyHost = "ai.hackclub.com";
+        proxyPath = "/proxy/v1/chat/completions";
+      } else if (provider === "openai") {
+        proxyHost = "api.openai.com";
+        proxyPath = "/v1/chat/completions";
+      } else {
+        proxyHost = "ai.hackclub.com";
+        proxyPath = targetPath;
+      }
+
       const opts = {
-        hostname: "ai.hackclub.com",
+        hostname: proxyHost,
         port: 443,
-        path: targetPath,
+        path: proxyPath,
         method: req.method,
         headers: {
           "content-type": req.headers["content-type"] || "application/json",
-          ...(req.headers["authorization"] && { authorization: req.headers["authorization"] }),
+          ...(authorization && { authorization }),
         },
       };
 
