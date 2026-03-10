@@ -626,6 +626,98 @@
     background: var(--surface3);
   }
 
+  /* ── Settings menu ── */
+  .settings-wrapper {
+    position: relative;
+  }
+
+  .settings-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-dim);
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .settings-btn:hover {
+    border-color: var(--border-hover);
+    background: var(--surface3);
+    color: var(--text);
+  }
+
+  .settings-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .settings-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    min-width: 280px;
+    z-index: 50;
+    box-shadow: 0 8px 32px #11111b66;
+    backdrop-filter: blur(12px);
+    animation: settingsIn 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .settings-dropdown.open {
+    display: block;
+  }
+
+  @keyframes settingsIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .settings-dropdown label {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  .settings-dropdown input {
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.84rem;
+    font-family: 'ABeeZee', sans-serif;
+    outline: none;
+    transition: all 0.2s;
+  }
+
+  .settings-dropdown input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .settings-dropdown .field-hint {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
   /* ── Responsive ── */
   @media (max-width: 700px) {
     .message { max-width: 92%; }
@@ -636,6 +728,7 @@
     .api-url-input { width: 160px; }
     select { max-width: 120px; }
     .welcome h2 { font-size: 1.3rem; }
+    .settings-dropdown { min-width: 240px; }
   }
 </style>
 </head>
@@ -666,6 +759,14 @@
     </select>
     <button class="header-btn" onclick="shareChat()" title="Share conversation">⤴ Share</button>
     <button class="header-btn danger" onclick="clearChat()" title="Clear conversation">✕ Clear</button>
+    <div class="settings-wrapper">
+      <button class="settings-btn" onclick="toggleSettings()" title="Settings">⚙</button>
+      <div class="settings-dropdown" id="settings-dropdown">
+        <label for="passcode-input">Passcode</label>
+        <input type="password" id="passcode-input" placeholder="Enter server passcode" autocomplete="off">
+        <div class="field-hint">Unlocks the server API key so you don't need your own.</div>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -808,12 +909,34 @@ const systemPromptInput = document.getElementById("system-prompt");
 const apiKeyInput = document.getElementById("api-key");
 const apiUrlInput = document.getElementById("api-url");
 const providerSelect = document.getElementById("provider-select");
+const passcodeInput = document.getElementById("passcode-input");
 
 // Persist settings in localStorage
 apiKeyInput.value = localStorage.getItem("hcai-key") || "";
 apiKeyInput.addEventListener("input", () => {
   localStorage.setItem("hcai-key", apiKeyInput.value);
   updateModelOptions();
+});
+
+passcodeInput.value = localStorage.getItem("hcai-passcode") || "";
+passcodeInput.addEventListener("input", () => {
+  localStorage.setItem("hcai-passcode", passcodeInput.value);
+});
+
+function toggleSettings() {
+  const dropdown = document.getElementById("settings-dropdown");
+  const btn = dropdown.parentElement.querySelector(".settings-btn");
+  const isOpen = dropdown.classList.toggle("open");
+  btn.classList.toggle("active", isOpen);
+}
+
+// Close settings when clicking outside
+document.addEventListener("click", (e) => {
+  const wrapper = document.querySelector(".settings-wrapper");
+  if (wrapper && !wrapper.contains(e.target)) {
+    document.getElementById("settings-dropdown").classList.remove("open");
+    wrapper.querySelector(".settings-btn").classList.remove("active");
+  }
 });
 
 apiUrlInput.value = localStorage.getItem("hcai-url") || "";
@@ -829,8 +952,6 @@ providerSelect.addEventListener("change", () => {
 });
 
 function getEffectiveProvider() {
-  const key = apiKeyInput.value.trim();
-  if (key.toLowerCase() === "knot the password") return "hackclub";
   return providerSelect.value;
 }
 
@@ -1109,13 +1230,17 @@ async function sendMessage() {
   try {
     abortController = new AbortController();
 
+    const passcode = passcodeInput.value.trim();
     const key = apiKeyInput.value.trim();
-    if (!key) { showError("Enter an API key first"); throw new Error("No API key"); }
-
     const provider = getEffectiveProvider();
+
+    // Use passcode for Hack Club if set, otherwise require an API key
+    const authToken = (provider === "hackclub" && passcode) ? passcode : key;
+    if (!authToken) { showError(passcode ? "" : provider === "hackclub" ? "Enter a passcode in settings or an API key" : "Enter an API key first"); throw new Error("No auth"); }
+
     const fetchHeaders = {
       "Content-Type": "application/json",
-      "Authorization": "Bearer " + key
+      "Authorization": "Bearer " + authToken
     };
     if (provider === "hackclub" || provider === "openai") {
       fetchHeaders["X-Provider"] = provider;
