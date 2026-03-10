@@ -59,6 +59,8 @@
 
   body > * { position: relative; z-index: 1; }
 
+  header { z-index: 10; }
+
   /* ── Header ── */
   header {
     padding: 14px 24px;
@@ -512,49 +514,32 @@
     to { opacity: 1; transform: translateX(0); }
   }
 
-  /* ── System prompt ── */
-  .system-prompt-area {
-    padding: 8px 20px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .system-prompt-toggle {
-    font-size: 0.76rem;
-    color: var(--text-dim);
-    cursor: pointer;
-    background: none;
-    border: none;
-    font-family: 'ABeeZee', sans-serif;
-    padding: 4px 0;
-    transition: color 0.2s;
-  }
-
-  .system-prompt-toggle:hover { color: var(--text-mid); }
-
-  .system-prompt-input {
+  .settings-textarea {
     width: 100%;
     background: var(--bg);
     color: var(--text);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 10px 12px;
+    padding: 8px 12px;
     font-family: 'ABeeZee', sans-serif;
     font-size: 0.84rem;
     line-height: 1.5;
     resize: vertical;
-    min-height: 40px;
+    min-height: 60px;
     max-height: 120px;
     outline: none;
-    margin-top: 6px;
-    display: none;
     transition: all 0.2s;
   }
 
-  .system-prompt-input:focus {
-    border-color: var(--border-hover);
-    box-shadow: 0 0 0 3px #1e1e2e06;
+  .settings-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .settings-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 12px 0;
   }
 
   /* ── Footer ── */
@@ -763,6 +748,9 @@
     <div class="settings-wrapper">
       <button class="settings-btn" onclick="toggleSettings()" title="Settings">Settings</button>
       <div class="settings-dropdown" id="settings-dropdown">
+        <label for="system-prompt">System Prompt</label>
+        <textarea id="system-prompt" class="settings-textarea" placeholder="Optional system prompt...">You are a helpful assistant.</textarea>
+        <div class="settings-divider"></div>
         <label for="passcode-input">Passcode</label>
         <input type="password" id="passcode-input" placeholder="Enter server passcode" autocomplete="off">
         <div class="field-hint">Unlocks the server API key so you don't need your own.</div>
@@ -770,11 +758,6 @@
     </div>
   </div>
 </header>
-
-<div class="system-prompt-area">
-  <button class="system-prompt-toggle" onclick="toggleSystemPrompt()">▸ system prompt</button>
-  <textarea id="system-prompt" class="system-prompt-input" placeholder="Optional system prompt...">You are a helpful assistant.</textarea>
-</div>
 
 <div id="chat-area">
   <div class="welcome">
@@ -1080,18 +1063,7 @@ msgInput.addEventListener("keydown", (e) => {
   }
 });
 
-function toggleSystemPrompt() {
-  const input = systemPromptInput;
-  const toggle = input.previousElementSibling;
-  if (input.style.display === "block") {
-    input.style.display = "none";
-    toggle.textContent = "▸ system prompt";
-  } else {
-    input.style.display = "block";
-    toggle.textContent = "▾ system prompt";
-    input.focus();
-  }
-}
+
 
 function clearChat() {
   if (isStreaming && abortController) {
