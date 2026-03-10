@@ -635,13 +635,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    gap: 5px;
     background: var(--surface2);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
+    padding: 7px 14px;
     color: var(--text-dim);
-    font-size: 1.1rem;
+    font-size: 0.82rem;
+    font-family: 'ABeeZee', sans-serif;
     cursor: pointer;
     transition: all 0.2s ease;
   }
@@ -668,7 +669,7 @@
     border-radius: var(--radius);
     padding: 16px;
     min-width: 280px;
-    z-index: 50;
+    z-index: 100;
     box-shadow: 0 8px 32px #11111b66;
     backdrop-filter: blur(12px);
     animation: settingsIn 0.2s cubic-bezier(0.22, 1, 0.36, 1);
@@ -760,7 +761,7 @@
     <button class="header-btn" onclick="shareChat()" title="Share conversation">⤴ Share</button>
     <button class="header-btn danger" onclick="clearChat()" title="Clear conversation">✕ Clear</button>
     <div class="settings-wrapper">
-      <button class="settings-btn" onclick="toggleSettings()" title="Settings">⚙</button>
+      <button class="settings-btn" onclick="toggleSettings()" title="Settings">Settings</button>
       <div class="settings-dropdown" id="settings-dropdown">
         <label for="passcode-input">Passcode</label>
         <input type="password" id="passcode-input" placeholder="Enter server passcode" autocomplete="off">
