@@ -44,6 +44,7 @@ Pick from 8+ models in the dropdown:
 
 - **Edit any message** — user or assistant, click edit, rewrite history
 - **Streamed responses** — tokens appear in real-time
+- **Midstream gaslighting** — interrupt an in-progress response, rewrite what the bot "already said," then continue
 - **System prompt** — customize the AI's personality before gaslighting it
 - **Model switching** — swap models mid-conversation
 - **API key persistence** — saved in localStorage so you don't re-enter it
