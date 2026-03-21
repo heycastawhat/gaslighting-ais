@@ -838,7 +838,7 @@
   </div>
   <div class="header-controls">
     <button class="header-btn" onclick="shareChat()" title="Share conversation">⤴ Share</button>
-    <button class="header-btn" id="mid-gaslight-btn" onclick="midstreamGaslight()" title="Interrupt and rewrite the in-progress response" disabled>Midstream Gaslight</button>
+    <button class="header-btn" id="mid-gaslight-btn" onclick="midstreamGaslight()" title="Interrupt and rewrite the model's in-progress thinking" disabled>Midstream Gaslight</button>
     <button class="header-btn danger" onclick="clearChat()" title="Clear conversation">✕ Clear</button>
     <div class="settings-wrapper">
       <button class="settings-btn" onclick="toggleSettings()" title="Settings">Settings</button>
@@ -1603,8 +1603,13 @@ async function sendMessage() {
     typingIndicator.style.display = "none";
     if (err.name !== "AbortError") {
       showError(err.message);
-      // Remove the failed assistant message if it was empty
-      if (conversation.length > 0 && conversation[conversation.length - 1].role === "assistant" && !conversation[conversation.length - 1].content) {
+      // Remove the failed assistant message if it has neither visible content nor reasoning.
+      if (
+        conversation.length > 0 &&
+        conversation[conversation.length - 1].role === "assistant" &&
+        !conversation[conversation.length - 1].content &&
+        !conversation[conversation.length - 1].reasoning
+      ) {
         conversation.pop();
         const lastMsg = chatArea.querySelector(`.message[data-index="${conversation.length}"]`);
         if (lastMsg) lastMsg.remove();
@@ -1631,26 +1636,25 @@ function midstreamGaslight() {
   if (!isStreaming || activeAssistantIndex === null) return;
 
   const index = activeAssistantIndex;
-  const current = conversation[index]?.content || "";
-  const rewritten = prompt("Rewrite what the bot already 'said' before it finishes:", current);
+  const current = conversation[index]?.reasoning || "";
+  const rewritten = prompt("Rewrite what the bot is currently thinking:", current);
   if (rewritten === null) return;
 
   const rewrittenText = rewritten.trim();
   if (!rewrittenText) {
-    showError("Midstream rewrite cannot be empty");
+    showError("Midstream thinking rewrite cannot be empty");
     return;
   }
 
-  const followup = prompt("Optional follow-up to send immediately after interruption:", "Keep reasoning from that point.");
+  const followup = prompt("Optional follow-up to send immediately after interruption:", "Continue from that revised thinking.");
   queuedMidstreamFollowup = (followup || "").trim() || null;
 
-  conversation[index].content = rewrittenText;
+  conversation[index].reasoning = rewrittenText;
   conversation[index].edited = true;
 
   const msgEl = chatArea.querySelector(`.message[data-index="${index}"]`);
   if (msgEl) {
-    const contentEl = msgEl.querySelector(".content");
-    if (contentEl) contentEl.textContent = rewrittenText;
+    updateReasoningPanel(msgEl, rewrittenText, true);
 
     const roleLabel = msgEl.querySelector(".role-label");
     if (roleLabel && !roleLabel.querySelector(".edited-badge")) {
