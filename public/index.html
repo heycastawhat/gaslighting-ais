@@ -1027,7 +1027,7 @@ let isStreaming = false;
 let abortController = null;
 let activeAssistantIndex = null;
 let streamUpdateLocked = false;
-let queuedMidstreamFollowup = null; // { text, silentUser } | null
+let queuedMidstreamFollowup = null; // { text, silentUser, reuseAssistantIndex, resetAssistantContent } | null
 
 const chatArea = document.getElementById("chat-area");
 const msgInput = document.getElementById("msg-input");
@@ -1501,12 +1501,29 @@ function showError(msg) {
 async function sendMessage(forcedText = null, options = {}) {
   const text = (forcedText === null ? msgInput.value : forcedText).trim();
   const silentUser = !!options.silentUser;
+  const reuseAssistantIndex = Number.isInteger(options.reuseAssistantIndex) ? options.reuseAssistantIndex : null;
+  const resetAssistantContent = !!options.resetAssistantContent;
   if (!text || isStreaming) return;
 
   if (!silentUser) {
     // Add user message
     conversation.push({ role: "user", content: text, edited: false });
     addMessageToDOM("user", text, conversation.length - 1);
+  }
+
+  // Build messages array for API before creating/updating the assistant placeholder.
+  const messages = [];
+  const sysprompt = systemPromptInput.value.trim();
+  if (sysprompt) {
+    messages.push({ role: "system", content: sysprompt });
+  }
+  for (let i = 0; i < conversation.length; i++) {
+    if (reuseAssistantIndex !== null && i === reuseAssistantIndex) continue;
+    const msg = conversation[i];
+    messages.push({ role: msg.role, content: msg.content });
+  }
+  if (silentUser) {
+    messages.push({ role: "user", content: text });
   }
 
   if (!forcedText) {
@@ -1516,33 +1533,36 @@ async function sendMessage(forcedText = null, options = {}) {
   sendBtn.disabled = true;
   isStreaming = true;
 
-  // Create assistant placeholder immediately so midstream intervention is
-  // available for the full request lifecycle (including initial wait time).
-  conversation.push({ role: "assistant", content: "", edited: false, reasoning: "" });
-  const botIndex = conversation.length - 1;
+  // Create or reuse assistant placeholder immediately so midstream intervention
+  // is available for the full request lifecycle (including initial wait time).
+  let botIndex = reuseAssistantIndex;
+  let createdAssistantPlaceholder = false;
+  if (
+    botIndex === null ||
+    botIndex < 0 ||
+    botIndex >= conversation.length ||
+    conversation[botIndex].role !== "assistant"
+  ) {
+    conversation.push({ role: "assistant", content: "", edited: false, reasoning: "" });
+    botIndex = conversation.length - 1;
+    createdAssistantPlaceholder = true;
+    addMessageToDOM("assistant", "", botIndex);
+  } else if (resetAssistantContent) {
+    conversation[botIndex].content = "";
+    const existingMsg = chatArea.querySelector(`.message[data-index="${botIndex}"]`);
+    const existingContent = existingMsg?.querySelector(".content");
+    if (existingContent) existingContent.textContent = "";
+  }
+
   activeAssistantIndex = botIndex;
   updateStreamingUI();
-  addMessageToDOM("assistant", "", botIndex);
   const botMsgEl = chatArea.querySelector(`.message[data-index="${botIndex}"]`);
-  const botContent = botMsgEl.querySelector(".content");
+  const botContent = botMsgEl?.querySelector(".content");
 
   // Show typing indicator
   typingIndicator.style.display = "flex";
   chatArea.appendChild(typingIndicator);
   chatArea.scrollTop = chatArea.scrollHeight;
-
-  // Build messages array for API
-  const messages = [];
-  const sysprompt = systemPromptInput.value.trim();
-  if (sysprompt) {
-    messages.push({ role: "system", content: sysprompt });
-  }
-  for (const msg of conversation) {
-    messages.push({ role: msg.role, content: msg.content });
-  }
-  if (silentUser) {
-    messages.push({ role: "user", content: text });
-  }
 
   try {
     abortController = new AbortController();
@@ -1612,7 +1632,7 @@ async function sendMessage(forcedText = null, options = {}) {
 
           if (!streamUpdateLocked && contentDelta) {
             fullText += contentDelta;
-            botContent.textContent = fullText;
+            if (botContent) botContent.textContent = fullText;
             conversation[botIndex].content = fullText;
             chatArea.scrollTop = chatArea.scrollHeight;
           }
@@ -1638,10 +1658,11 @@ async function sendMessage(forcedText = null, options = {}) {
       showError(err.message);
       // Remove the failed assistant message if it has neither visible content nor reasoning.
       if (
-        conversation.length > 0 &&
-        conversation[conversation.length - 1].role === "assistant" &&
-        !conversation[conversation.length - 1].content &&
-        !conversation[conversation.length - 1].reasoning
+        createdAssistantPlaceholder &&
+        botIndex === conversation.length - 1 &&
+        conversation[botIndex].role === "assistant" &&
+        !conversation[botIndex].content &&
+        !conversation[botIndex].reasoning
       ) {
         conversation.pop();
         const lastMsg = chatArea.querySelector(`.message[data-index="${conversation.length}"]`);
@@ -1659,7 +1680,11 @@ async function sendMessage(forcedText = null, options = {}) {
     updateStreamingUI();
     msgInput.focus();
     if (followup && followup.text) {
-      sendMessage(followup.text, { silentUser: !!followup.silentUser });
+      sendMessage(followup.text, {
+        silentUser: !!followup.silentUser,
+        reuseAssistantIndex: Number.isInteger(followup.reuseAssistantIndex) ? followup.reuseAssistantIndex : null,
+        resetAssistantContent: !!followup.resetAssistantContent
+      });
     }
   }
 }
@@ -1680,14 +1705,19 @@ function midstreamGaslight() {
 
   queuedMidstreamFollowup = {
     text: "Continue and provide your response.",
-    silentUser: true
+    silentUser: true,
+    reuseAssistantIndex: index,
+    resetAssistantContent: true
   };
 
   conversation[index].reasoning = rewrittenText;
+  conversation[index].content = "";
   conversation[index].edited = true;
 
   const msgEl = chatArea.querySelector(`.message[data-index="${index}"]`);
   if (msgEl) {
+    const contentEl = msgEl.querySelector(".content");
+    if (contentEl) contentEl.textContent = "";
     updateReasoningPanel(msgEl, rewrittenText, true);
 
     const roleLabel = msgEl.querySelector(".role-label");
