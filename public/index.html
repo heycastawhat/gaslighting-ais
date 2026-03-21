@@ -1027,7 +1027,7 @@ let isStreaming = false;
 let abortController = null;
 let activeAssistantIndex = null;
 let streamUpdateLocked = false;
-let queuedMidstreamFollowup = null; // { text, silentUser, reuseAssistantIndex, resetAssistantContent } | null
+let queuedMidstreamFollowup = null; // { text, silentUser, reuseAssistantIndex, resetAssistantContent, injectedReasoning } | null
 
 const chatArea = document.getElementById("chat-area");
 const msgInput = document.getElementById("msg-input");
@@ -1503,6 +1503,7 @@ async function sendMessage(forcedText = null, options = {}) {
   const silentUser = !!options.silentUser;
   const reuseAssistantIndex = Number.isInteger(options.reuseAssistantIndex) ? options.reuseAssistantIndex : null;
   const resetAssistantContent = !!options.resetAssistantContent;
+  const injectedReasoning = typeof options.injectedReasoning === "string" ? options.injectedReasoning.trim() : "";
   if (!text || isStreaming) return;
 
   if (!silentUser) {
@@ -1517,10 +1518,26 @@ async function sendMessage(forcedText = null, options = {}) {
   if (sysprompt) {
     messages.push({ role: "system", content: sysprompt });
   }
+  let reasoningInjectedIntoAssistant = false;
   for (let i = 0; i < conversation.length; i++) {
-    if (reuseAssistantIndex !== null && i === reuseAssistantIndex) continue;
     const msg = conversation[i];
+
+    if (reuseAssistantIndex !== null && i === reuseAssistantIndex && msg.role === "assistant") {
+      const assistantContent = injectedReasoning
+        ? "<internal_reasoning>\n" + injectedReasoning + "\n</internal_reasoning>\n\n" + (msg.content || "")
+        : (msg.content || "");
+      messages.push({ role: "assistant", content: assistantContent });
+      reasoningInjectedIntoAssistant = !!injectedReasoning;
+      continue;
+    }
+
     messages.push({ role: msg.role, content: msg.content });
+  }
+  if (injectedReasoning && !reasoningInjectedIntoAssistant) {
+    messages.push({
+      role: "assistant",
+      content: "<internal_reasoning>\n" + injectedReasoning + "\n</internal_reasoning>"
+    });
   }
   if (silentUser) {
     messages.push({ role: "user", content: text });
@@ -1683,7 +1700,8 @@ async function sendMessage(forcedText = null, options = {}) {
       sendMessage(followup.text, {
         silentUser: !!followup.silentUser,
         reuseAssistantIndex: Number.isInteger(followup.reuseAssistantIndex) ? followup.reuseAssistantIndex : null,
-        resetAssistantContent: !!followup.resetAssistantContent
+        resetAssistantContent: !!followup.resetAssistantContent,
+        injectedReasoning: followup.injectedReasoning || ""
       });
     }
   }
@@ -1704,10 +1722,11 @@ function midstreamGaslight() {
   }
 
   queuedMidstreamFollowup = {
-    text: "Continue and provide your response.",
+    text: "Based on the reasoning above, provide the final answer only. Do not repeat the reasoning.",
     silentUser: true,
     reuseAssistantIndex: index,
-    resetAssistantContent: true
+    resetAssistantContent: true,
+    injectedReasoning: rewrittenText
   };
 
   conversation[index].reasoning = rewrittenText;
