@@ -840,6 +840,29 @@
     line-height: 1.4;
   }
 
+  .settings-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    font-size: 0.82rem !important;
+    color: var(--text-mid) !important;
+    margin: 0;
+  }
+
+  .settings-toggle input {
+    width: 14px !important;
+    height: 14px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    box-shadow: none;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
   /* ── Responsive ── */
   @media (max-width: 700px) {
     .message { max-width: 92%; }
@@ -889,6 +912,12 @@
         </div>
         <div class="custom-model-list" id="custom-model-list"></div>
         <div class="field-hint">Added models appear in the model picker for all providers.</div>
+        <div class="settings-divider"></div>
+        <label class="settings-toggle" for="force-thinking">
+          <input type="checkbox" id="force-thinking">
+          Force visible thinking
+        </label>
+        <div class="field-hint">Asks the model to emit <code>&lt;thinking&gt;</code> and <code>&lt;answer&gt;</code>. This is model-generated output, not hidden internal reasoning.</div>
         <div class="settings-divider"></div>
         <label for="system-prompt">System Prompt</label>
         <textarea id="system-prompt" class="settings-textarea" placeholder="Optional system prompt...">You are a helpful assistant.</textarea>
@@ -1042,6 +1071,7 @@ const passcodeInput = document.getElementById("passcode-input");
 const midGaslightBtn = document.getElementById("mid-gaslight-btn");
 const customModelInput = document.getElementById("custom-model-input");
 const customModelList = document.getElementById("custom-model-list");
+const forceThinkingInput = document.getElementById("force-thinking");
 let customModels = [];
 
 function updateStreamingUI() {
@@ -1058,6 +1088,11 @@ apiKeyInput.addEventListener("input", () => {
 passcodeInput.value = localStorage.getItem("hcai-passcode") || "";
 passcodeInput.addEventListener("input", () => {
   localStorage.setItem("hcai-passcode", passcodeInput.value);
+});
+
+forceThinkingInput.checked = localStorage.getItem("hcai-force-thinking") !== "0";
+forceThinkingInput.addEventListener("change", () => {
+  localStorage.setItem("hcai-force-thinking", forceThinkingInput.checked ? "1" : "0");
 });
 
 function toggleSettings() {
@@ -1431,6 +1466,46 @@ function extractReasoningDelta(delta, choice) {
   return "";
 }
 
+function extractTaggedThinkingAndAnswer(text) {
+  const thinkingOpenTag = "<thinking>";
+  const thinkingCloseTag = "</thinking>";
+  const answerOpenTag = "<answer>";
+  const answerCloseTag = "</answer>";
+
+  const thinkingOpen = text.indexOf(thinkingOpenTag);
+  const answerOpen = text.indexOf(answerOpenTag);
+  const usedTags = thinkingOpen !== -1 || answerOpen !== -1;
+  if (!usedTags) {
+    return { usedTags: false, thinking: "", answer: text };
+  }
+
+  let thinking = "";
+  let answer = "";
+
+  if (thinkingOpen !== -1) {
+    const start = thinkingOpen + thinkingOpenTag.length;
+    const close = text.indexOf(thinkingCloseTag, start);
+    thinking = close !== -1 ? text.slice(start, close) : text.slice(start);
+  }
+
+  if (answerOpen !== -1) {
+    const start = answerOpen + answerOpenTag.length;
+    const close = text.indexOf(answerCloseTag, start);
+    answer = close !== -1 ? text.slice(start, close) : text.slice(start);
+  } else if (thinkingOpen !== -1) {
+    const close = text.indexOf(thinkingCloseTag, thinkingOpen + thinkingOpenTag.length);
+    if (close !== -1) {
+      answer = text.slice(close + thinkingCloseTag.length);
+    }
+  }
+
+  return {
+    usedTags: true,
+    thinking,
+    answer: answer.replace(/^\s+/, "")
+  };
+}
+
 function startEdit(index) {
   const msgEl = chatArea.querySelector(`.message[data-index="${index}"]`);
   if (!msgEl || msgEl.classList.contains("editing")) return;
@@ -1504,6 +1579,7 @@ async function sendMessage(forcedText = null, options = {}) {
   const reuseAssistantIndex = Number.isInteger(options.reuseAssistantIndex) ? options.reuseAssistantIndex : null;
   const resetAssistantContent = !!options.resetAssistantContent;
   const injectedReasoning = typeof options.injectedReasoning === "string" ? options.injectedReasoning.trim() : "";
+  const forceVisibleThinking = forceThinkingInput.checked;
   if (!text || isStreaming) return;
 
   if (!silentUser) {
@@ -1517,6 +1593,15 @@ async function sendMessage(forcedText = null, options = {}) {
   const sysprompt = systemPromptInput.value.trim();
   if (sysprompt) {
     messages.push({ role: "system", content: sysprompt });
+  }
+  if (forceVisibleThinking) {
+    messages.push({
+      role: "system",
+      content:
+        "For this response, output exactly two sections in this order: " +
+        "<thinking>...</thinking> followed by <answer>...</answer>. " +
+        "Put your full reasoning inside <thinking>. Put only the final user-facing response in <answer>."
+    });
   }
   let reasoningInjectedIntoAssistant = false;
   for (let i = 0; i < conversation.length; i++) {
@@ -1625,6 +1710,8 @@ async function sendMessage(forcedText = null, options = {}) {
     let buffer = "";
     let fullText = "";
     let fullReasoning = conversation[botIndex].reasoning || "";
+    let fullRawText = "";
+    let hasTaggedThinking = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -1648,19 +1735,54 @@ async function sendMessage(forcedText = null, options = {}) {
           const reasoningDelta = extractReasoningDelta(deltaObj, choice);
 
           if (!streamUpdateLocked && contentDelta) {
-            fullText += contentDelta;
-            if (botContent) botContent.textContent = fullText;
-            conversation[botIndex].content = fullText;
+            if (forceVisibleThinking) {
+              fullRawText += contentDelta;
+              const tagged = extractTaggedThinkingAndAnswer(fullRawText);
+
+              if (tagged.usedTags) {
+                fullText = tagged.answer;
+                hasTaggedThinking = !!tagged.thinking;
+                if (botContent) botContent.textContent = fullText;
+                conversation[botIndex].content = fullText;
+
+                if (tagged.thinking) {
+                  fullReasoning = tagged.thinking;
+                  conversation[botIndex].reasoning = fullReasoning;
+                  updateReasoningPanel(botMsgEl, fullReasoning, false);
+                }
+              } else {
+                fullText = fullRawText;
+                if (botContent) botContent.textContent = fullText;
+                conversation[botIndex].content = fullText;
+              }
+            } else {
+              fullText += contentDelta;
+              if (botContent) botContent.textContent = fullText;
+              conversation[botIndex].content = fullText;
+            }
             chatArea.scrollTop = chatArea.scrollHeight;
           }
 
-          if (!streamUpdateLocked && reasoningDelta) {
+          if (!streamUpdateLocked && reasoningDelta && !hasTaggedThinking) {
             fullReasoning += reasoningDelta;
             conversation[botIndex].reasoning = fullReasoning;
             updateReasoningPanel(botMsgEl, fullReasoning, false);
             chatArea.scrollTop = chatArea.scrollHeight;
           }
         } catch {}
+      }
+    }
+
+    if (forceVisibleThinking && fullRawText) {
+      const finalTagged = extractTaggedThinkingAndAnswer(fullRawText);
+      if (finalTagged.usedTags) {
+        fullText = finalTagged.answer;
+        conversation[botIndex].content = fullText;
+        if (botContent) botContent.textContent = fullText;
+        if (finalTagged.thinking) {
+          fullReasoning = finalTagged.thinking;
+          conversation[botIndex].reasoning = fullReasoning;
+        }
       }
     }
 
