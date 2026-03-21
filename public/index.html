@@ -751,7 +751,7 @@
       <option value="z-ai/glm-4.6">GLM 4.6</option>
     </select>
     <button class="header-btn" onclick="shareChat()" title="Share conversation">⤴ Share</button>
-    <button class="header-btn" id="mid-gaslight-btn" onclick="midstreamGaslight()" title="Interrupt and rewrite the in-progress response" disabled>⚡ Midstream Gaslight</button>
+    <button class="header-btn" id="mid-gaslight-btn" onclick="midstreamGaslight()" title="Interrupt and rewrite the in-progress response" disabled>Midstream Gaslight</button>
     <button class="header-btn danger" onclick="clearChat()" title="Clear conversation">✕ Clear</button>
     <div class="settings-wrapper">
       <button class="settings-btn" onclick="toggleSettings()" title="Settings">Settings</button>
@@ -1204,7 +1204,16 @@ async function sendMessage() {
   msgInput.style.height = "auto";
   sendBtn.disabled = true;
   isStreaming = true;
+
+  // Create assistant placeholder immediately so midstream intervention is
+  // available for the full request lifecycle (including initial wait time).
+  conversation.push({ role: "assistant", content: "", edited: false });
+  const botIndex = conversation.length - 1;
+  activeAssistantIndex = botIndex;
   updateStreamingUI();
+  addMessageToDOM("assistant", "", botIndex);
+  const botMsgEl = chatArea.querySelector(`.message[data-index="${botIndex}"]`);
+  const botContent = botMsgEl.querySelector(".content");
 
   // Show typing indicator
   typingIndicator.style.display = "flex";
@@ -1257,15 +1266,6 @@ async function sendMessage() {
     }
 
     typingIndicator.style.display = "none";
-
-    // Add a placeholder for the assistant message
-    conversation.push({ role: "assistant", content: "", edited: false });
-    const botIndex = conversation.length - 1;
-    activeAssistantIndex = botIndex;
-    updateStreamingUI();
-    addMessageToDOM("assistant", "", botIndex);
-    const botMsgEl = chatArea.querySelector(`.message[data-index="${botIndex}"]`);
-    const botContent = botMsgEl.querySelector(".content");
 
     // Stream the response
     const reader = resp.body.getReader();
