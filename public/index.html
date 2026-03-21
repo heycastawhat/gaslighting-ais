@@ -255,9 +255,10 @@
 
   .reasoning-panel {
     margin: 8px 0 10px;
-    border: 1px solid #7ab6ff;
-    border-radius: 12px;
-    background: #0f1420;
+    border: 1px solid var(--bot-border);
+    border-radius: 10px;
+    background: linear-gradient(180deg, #1f2134 0%, #1a1c2f 100%);
+    box-shadow: inset 0 1px 0 #ffffff0f;
     overflow: hidden;
   }
 
@@ -268,22 +269,43 @@
   .reasoning-header {
     width: 100%;
     border: none;
-    border-bottom: 1px solid #7ab6ff66;
+    border-bottom: 1px solid #ffffff12;
     background: transparent;
-    color: #dce8ff;
+    color: var(--text);
     font-family: 'ABeeZee', sans-serif;
-    font-size: 0.9rem;
-    font-weight: 700;
+    font-size: 0.82rem;
+    font-weight: 600;
     text-align: left;
-    padding: 10px 12px;
+    padding: 8px 10px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     cursor: pointer;
   }
 
+  .reasoning-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .reasoning-status::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #cba6f7;
+    box-shadow: 0 0 0 2px #cba6f733;
+    flex-shrink: 0;
+  }
+
+  .reasoning-panel.completed .reasoning-status::before {
+    background: #a6e3a1;
+    box-shadow: 0 0 0 2px #a6e3a133;
+  }
+
   .reasoning-caret {
-    color: #9fb0d2;
+    color: var(--text-dim);
     transition: transform 0.2s ease;
   }
 
@@ -292,15 +314,16 @@
   }
 
   .reasoning-body {
-    color: #b8c1d6;
+    color: var(--text-mid);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    font-size: 0.84rem;
+    font-size: 0.8rem;
     line-height: 1.55;
     white-space: pre-wrap;
     word-break: break-word;
-    padding: 10px 12px;
-    border-left: 4px solid #2e3f5a;
-    margin: 0 10px 10px;
+    padding: 10px 10px 10px 12px;
+    border-left: 2px solid var(--bot-border);
+    background: #11132580;
+    margin: 0;
   }
 
   .reasoning-panel.collapsed .reasoning-body {
@@ -838,7 +861,7 @@
   </div>
   <div class="header-controls">
     <button class="header-btn" onclick="shareChat()" title="Share conversation">⤴ Share</button>
-    <button class="header-btn" id="mid-gaslight-btn" onclick="midstreamGaslight()" title="Interrupt and rewrite the model's in-progress thinking" disabled>Midstream Gaslight</button>
+    <button class="header-btn" id="mid-gaslight-btn" onclick="midstreamGaslight()" title="Rewrite in-progress thinking, then auto-continue the response" disabled>Midstream Gaslight</button>
     <button class="header-btn danger" onclick="clearChat()" title="Clear conversation">✕ Clear</button>
     <div class="settings-wrapper">
       <button class="settings-btn" onclick="toggleSettings()" title="Settings">Settings</button>
@@ -1004,7 +1027,7 @@ let isStreaming = false;
 let abortController = null;
 let activeAssistantIndex = null;
 let streamUpdateLocked = false;
-let queuedMidstreamFollowup = null;
+let queuedMidstreamFollowup = null; // { text, silentUser } | null
 
 const chatArea = document.getElementById("chat-area");
 const msgInput = document.getElementById("msg-input");
@@ -1317,7 +1340,7 @@ function addMessageToDOM(role, content, index) {
   const edited = conversation[index].edited ? ' <span class="edited-badge">(edited)</span>' : "";
   const reasoning = conversation[index].reasoning || "";
   const reasoningPanel = role === "assistant"
-    ? `<div class="reasoning-panel${reasoning ? "" : " hidden"}">
+    ? `<div class="reasoning-panel${reasoning ? " completed" : " hidden"}">
          <button class="reasoning-header" type="button" onclick="toggleReasoning(this)">
            <span class="reasoning-status">${reasoning ? "Thinking completed" : "Thinking"}</span>
            <span class="reasoning-caret">▾</span>
@@ -1347,10 +1370,12 @@ function updateReasoningPanel(msgEl, text, completed) {
   if (!panel) return;
   if (!text) {
     panel.classList.add("hidden");
+    panel.classList.remove("completed");
     return;
   }
 
   panel.classList.remove("hidden");
+  panel.classList.toggle("completed", !!completed);
   const body = panel.querySelector(".reasoning-body");
   const status = panel.querySelector(".reasoning-status");
   body.textContent = text;
@@ -1473,16 +1498,21 @@ function showError(msg) {
   setTimeout(() => toast.remove(), 5000);
 }
 
-async function sendMessage() {
-  const text = msgInput.value.trim();
+async function sendMessage(forcedText = null, options = {}) {
+  const text = (forcedText === null ? msgInput.value : forcedText).trim();
+  const silentUser = !!options.silentUser;
   if (!text || isStreaming) return;
 
-  // Add user message
-  conversation.push({ role: "user", content: text, edited: false });
-  addMessageToDOM("user", text, conversation.length - 1);
+  if (!silentUser) {
+    // Add user message
+    conversation.push({ role: "user", content: text, edited: false });
+    addMessageToDOM("user", text, conversation.length - 1);
+  }
 
-  msgInput.value = "";
-  msgInput.style.height = "auto";
+  if (!forcedText) {
+    msgInput.value = "";
+    msgInput.style.height = "auto";
+  }
   sendBtn.disabled = true;
   isStreaming = true;
 
@@ -1509,6 +1539,9 @@ async function sendMessage() {
   }
   for (const msg of conversation) {
     messages.push({ role: msg.role, content: msg.content });
+  }
+  if (silentUser) {
+    messages.push({ role: "user", content: text });
   }
 
   try {
@@ -1625,9 +1658,8 @@ async function sendMessage() {
     queuedMidstreamFollowup = null;
     updateStreamingUI();
     msgInput.focus();
-    if (followup) {
-      msgInput.value = followup;
-      sendMessage();
+    if (followup && followup.text) {
+      sendMessage(followup.text, { silentUser: !!followup.silentUser });
     }
   }
 }
@@ -1646,8 +1678,10 @@ function midstreamGaslight() {
     return;
   }
 
-  const followup = prompt("Optional follow-up to send immediately after interruption:", "Continue from that revised thinking.");
-  queuedMidstreamFollowup = (followup || "").trim() || null;
+  queuedMidstreamFollowup = {
+    text: "Continue and provide your response.",
+    silentUser: true
+  };
 
   conversation[index].reasoning = rewrittenText;
   conversation[index].edited = true;
