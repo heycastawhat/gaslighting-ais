@@ -253,6 +253,60 @@
 
   .message .content { min-height: 0; }
 
+  .reasoning-panel {
+    margin: 8px 0 10px;
+    border: 1px solid #7ab6ff;
+    border-radius: 12px;
+    background: #0f1420;
+    overflow: hidden;
+  }
+
+  .reasoning-panel.hidden {
+    display: none;
+  }
+
+  .reasoning-header {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid #7ab6ff66;
+    background: transparent;
+    color: #dce8ff;
+    font-family: 'ABeeZee', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-align: left;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+  }
+
+  .reasoning-caret {
+    color: #9fb0d2;
+    transition: transform 0.2s ease;
+  }
+
+  .reasoning-panel.collapsed .reasoning-caret {
+    transform: rotate(-90deg);
+  }
+
+  .reasoning-body {
+    color: #b8c1d6;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.84rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding: 10px 12px;
+    border-left: 4px solid #2e3f5a;
+    margin: 0 10px 10px;
+  }
+
+  .reasoning-panel.collapsed .reasoning-body {
+    display: none;
+  }
+
   .message .edit-btn {
     font-size: 0.68rem;
     background: none;
@@ -660,7 +714,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 16px;
-    min-width: 280px;
+    min-width: 380px;
     z-index: 100;
     box-shadow: 0 8px 32px #11111b66;
     backdrop-filter: blur(12px);
@@ -686,7 +740,9 @@
     font-weight: 600;
   }
 
-  .settings-dropdown input {
+  .settings-dropdown input,
+  .settings-dropdown select,
+  .settings-dropdown .settings-action {
     width: 100%;
     background: var(--bg);
     color: var(--text);
@@ -699,9 +755,59 @@
     transition: all 0.2s;
   }
 
-  .settings-dropdown input:focus {
+  .settings-dropdown input:focus,
+  .settings-dropdown select:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .settings-dropdown select {
+    cursor: pointer;
+  }
+
+  .settings-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .settings-row .settings-action {
+    width: auto;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .custom-model-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .custom-model-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    padding: 3px 8px;
+    font-size: 0.75rem;
+    color: var(--text-mid);
+  }
+
+  .custom-model-chip button {
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 0.78rem;
+    line-height: 1;
+    padding: 0;
+  }
+
+  .custom-model-chip button:hover {
+    color: var(--accent);
   }
 
   .settings-dropdown .field-hint {
@@ -719,9 +825,8 @@
     .header-controls { gap: 6px; }
     .api-key-input { width: 140px; }
     .api-url-input { width: 160px; }
-    select { max-width: 120px; }
     .welcome h2 { font-size: 1.3rem; }
-    .settings-dropdown { min-width: 240px; }
+    .settings-dropdown { min-width: 280px; max-width: calc(100vw - 28px); }
   }
 </style>
 </head>
@@ -732,30 +837,36 @@
     <h1>gaslight a bot<span>break llms</span></h1>
   </div>
   <div class="header-controls">
-    <select id="provider-select">
-      <option value="hackclub">Hack Club AI</option>
-      <option value="openai">OpenAI</option>
-      <option value="openrouter">OpenRouter</option>
-      <option value="custom">Custom</option>
-    </select>
-    <input type="text" id="api-url" class="api-key-input api-url-input" placeholder="https://your-api.com/v1" autocomplete="off" spellcheck="false">
-    <input type="password" id="api-key" class="api-key-input" placeholder="API key" autocomplete="off">
-    <select id="model-select">
-      <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
-      <option value="openai/gpt-5-mini">GPT-5 Mini</option>
-      <option value="openai/gpt-oss-120b">GPT-OSS 120B</option>
-      <option value="deepseek/deepseek-r1-0528">DeepSeek R1</option>
-      <option value="deepseek/deepseek-v3.2-exp">DeepSeek V3.2</option>
-      <option value="qwen/qwen3-32b">Qwen3 32B</option>
-      <option value="moonshotai/kimi-k2-thinking">Kimi K2</option>
-      <option value="z-ai/glm-4.6">GLM 4.6</option>
-    </select>
     <button class="header-btn" onclick="shareChat()" title="Share conversation">⤴ Share</button>
     <button class="header-btn" id="mid-gaslight-btn" onclick="midstreamGaslight()" title="Interrupt and rewrite the in-progress response" disabled>Midstream Gaslight</button>
     <button class="header-btn danger" onclick="clearChat()" title="Clear conversation">✕ Clear</button>
     <div class="settings-wrapper">
       <button class="settings-btn" onclick="toggleSettings()" title="Settings">Settings</button>
       <div class="settings-dropdown" id="settings-dropdown">
+        <label for="provider-select">Provider</label>
+        <select id="provider-select">
+          <option value="hackclub">Hack Club AI</option>
+          <option value="openai">OpenAI</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="custom">Custom</option>
+        </select>
+        <div class="settings-divider"></div>
+        <label for="api-key">API Key</label>
+        <input type="password" id="api-key" class="api-key-input" placeholder="API key" autocomplete="off">
+        <div class="field-hint">Used for OpenAI/OpenRouter/custom, or Hack Club if no passcode is set.</div>
+        <label for="api-url">Custom API Base URL</label>
+        <input type="text" id="api-url" class="api-key-input api-url-input" placeholder="https://your-api.com/v1" autocomplete="off" spellcheck="false">
+        <div class="settings-divider"></div>
+        <label for="model-select">Model</label>
+        <select id="model-select"></select>
+        <label for="custom-model-input" style="margin-top: 10px;">Custom Models</label>
+        <div class="settings-row">
+          <input type="text" id="custom-model-input" placeholder="e.g. anthropic/claude-sonnet-4">
+          <button class="settings-action" type="button" onclick="addCustomModel()">Add</button>
+        </div>
+        <div class="custom-model-list" id="custom-model-list"></div>
+        <div class="field-hint">Added models appear in the model picker for all providers.</div>
+        <div class="settings-divider"></div>
         <label for="system-prompt">System Prompt</label>
         <textarea id="system-prompt" class="settings-textarea" placeholder="Optional system prompt...">You are a helpful assistant.</textarea>
         <div class="settings-divider"></div>
@@ -888,7 +999,7 @@ const MODEL_OPTIONS = {
   custom: null
 };
 
-let conversation = []; // {role, content, edited}
+let conversation = []; // {role, content, edited, reasoning}
 let isStreaming = false;
 let abortController = null;
 let activeAssistantIndex = null;
@@ -906,6 +1017,9 @@ const apiUrlInput = document.getElementById("api-url");
 const providerSelect = document.getElementById("provider-select");
 const passcodeInput = document.getElementById("passcode-input");
 const midGaslightBtn = document.getElementById("mid-gaslight-btn");
+const customModelInput = document.getElementById("custom-model-input");
+const customModelList = document.getElementById("custom-model-list");
+let customModels = [];
 
 function updateStreamingUI() {
   midGaslightBtn.disabled = !(isStreaming && activeAssistantIndex !== null);
@@ -944,6 +1058,14 @@ apiUrlInput.addEventListener("input", () => {
   localStorage.setItem("hcai-url", apiUrlInput.value);
 });
 
+try {
+  const rawCustomModels = JSON.parse(localStorage.getItem("hcai-custom-models") || "[]");
+  if (Array.isArray(rawCustomModels)) {
+    customModels = rawCustomModels.filter((m) => typeof m === "string" && m.trim()).map((m) => m.trim());
+  }
+} catch {}
+renderCustomModelList();
+
 providerSelect.value = localStorage.getItem("hcai-provider") || "hackclub";
 updateProviderUI();
 providerSelect.addEventListener("change", () => {
@@ -951,15 +1073,92 @@ providerSelect.addEventListener("change", () => {
   updateProviderUI();
 });
 
+customModelInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    addCustomModel();
+  }
+});
+
 function getEffectiveProvider() {
   return providerSelect.value;
 }
 
+function saveCustomModels() {
+  localStorage.setItem("hcai-custom-models", JSON.stringify(customModels));
+}
+
+function renderCustomModelList() {
+  customModelList.innerHTML = "";
+  if (!customModels.length) {
+    const hint = document.createElement("div");
+    hint.className = "field-hint";
+    hint.textContent = "No custom models yet.";
+    customModelList.appendChild(hint);
+    return;
+  }
+
+  customModels.forEach((model) => {
+    const chip = document.createElement("div");
+    chip.className = "custom-model-chip";
+
+    const text = document.createElement("span");
+    text.textContent = model;
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.title = "Remove model";
+    remove.textContent = "x";
+    remove.addEventListener("click", () => removeCustomModel(model));
+
+    chip.appendChild(text);
+    chip.appendChild(remove);
+    customModelList.appendChild(chip);
+  });
+}
+
+function addCustomModel() {
+  const model = customModelInput.value.trim();
+  if (!model) return;
+  if (customModels.includes(model)) {
+    customModelInput.value = "";
+    return;
+  }
+  customModels.push(model);
+  saveCustomModels();
+  renderCustomModelList();
+  updateModelOptions();
+  modelSelect.value = model;
+  customModelInput.value = "";
+}
+
+function removeCustomModel(model) {
+  customModels = customModels.filter((m) => m !== model);
+  saveCustomModels();
+  renderCustomModelList();
+  updateModelOptions();
+}
+
 function updateModelOptions() {
   const provider = getEffectiveProvider();
-  const models = MODEL_OPTIONS[provider] || MODEL_OPTIONS.hackclub;
+  const providerModels = MODEL_OPTIONS[provider] || [];
+  const models = [...providerModels];
+  const seen = new Set(providerModels.map((m) => m.value));
+  for (const custom of customModels) {
+    if (seen.has(custom)) continue;
+    models.push({ value: custom, label: custom });
+  }
   const currentValue = modelSelect.value;
   modelSelect.innerHTML = "";
+  if (!models.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "Add a custom model in Settings";
+    opt.disabled = true;
+    modelSelect.appendChild(opt);
+    return;
+  }
+
   for (const m of models) {
     const opt = document.createElement("option");
     opt.value = m.value;
@@ -968,6 +1167,8 @@ function updateModelOptions() {
   }
   if ([...modelSelect.options].some(o => o.value === currentValue)) {
     modelSelect.value = currentValue;
+  } else {
+    modelSelect.value = models[0].value;
   }
 }
 
@@ -1114,8 +1315,18 @@ function addMessageToDOM(role, content, index) {
 
   const roleLabel = role === "user" ? "You" : "Bot";
   const edited = conversation[index].edited ? ' <span class="edited-badge">(edited)</span>' : "";
+  const reasoning = conversation[index].reasoning || "";
+  const reasoningPanel = role === "assistant"
+    ? `<div class="reasoning-panel${reasoning ? "" : " hidden"}">
+         <button class="reasoning-header" type="button" onclick="toggleReasoning(this)">
+           <span class="reasoning-status">${reasoning ? "Thinking completed" : "Thinking"}</span>
+           <span class="reasoning-caret">▾</span>
+         </button>
+         <div class="reasoning-body">${escapeHtml(reasoning)}</div>
+       </div>`
+    : "";
 
-  msg.innerHTML = `<div class="role-label">${roleLabel}${edited}<button class="edit-btn" onclick="startEdit(${index})">edit</button></div><div class="content">${escapeHtml(content)}</div>`;
+  msg.innerHTML = `<div class="role-label">${roleLabel}${edited}<button class="edit-btn" onclick="startEdit(${index})">edit</button></div>${reasoningPanel}<div class="content">${escapeHtml(content)}</div>`;
 
   // Remove welcome message if present
   const welcome = chatArea.querySelector(".welcome");
@@ -1123,6 +1334,76 @@ function addMessageToDOM(role, content, index) {
 
   chatArea.appendChild(msg);
   chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function toggleReasoning(btn) {
+  const panel = btn.closest(".reasoning-panel");
+  if (panel) panel.classList.toggle("collapsed");
+}
+
+function updateReasoningPanel(msgEl, text, completed) {
+  if (!msgEl) return;
+  const panel = msgEl.querySelector(".reasoning-panel");
+  if (!panel) return;
+  if (!text) {
+    panel.classList.add("hidden");
+    return;
+  }
+
+  panel.classList.remove("hidden");
+  const body = panel.querySelector(".reasoning-body");
+  const status = panel.querySelector(".reasoning-status");
+  body.textContent = text;
+  status.textContent = completed ? "Thinking completed" : "Thinking";
+}
+
+function extractDeltaText(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    return value.map((part) => {
+      if (typeof part === "string") return part;
+      if (part && typeof part === "object") {
+        return part.text || part.content || "";
+      }
+      return "";
+    }).join("");
+  }
+  if (typeof value === "object") {
+    return value.text || value.content || "";
+  }
+  return "";
+}
+
+function extractContentDelta(delta) {
+  if (!delta) return "";
+  return extractDeltaText(delta.content);
+}
+
+function extractReasoningDelta(delta, choice) {
+  if (!delta) return "";
+
+  const direct = [
+    delta.reasoning_content,
+    delta.reasoning,
+    delta.thinking,
+    choice?.reasoning_content,
+    choice?.reasoning
+  ];
+  for (const candidate of direct) {
+    const text = extractDeltaText(candidate);
+    if (text) return text;
+  }
+
+  if (Array.isArray(delta.content)) {
+    const reasoningParts = delta.content
+      .filter((part) => part && typeof part === "object" && /(reason|think)/i.test(part.type || ""))
+      .map((part) => part.text || part.content || "")
+      .join("");
+    if (reasoningParts) return reasoningParts;
+  }
+
+  return "";
 }
 
 function startEdit(index) {
@@ -1207,7 +1488,7 @@ async function sendMessage() {
 
   // Create assistant placeholder immediately so midstream intervention is
   // available for the full request lifecycle (including initial wait time).
-  conversation.push({ role: "assistant", content: "", edited: false });
+  conversation.push({ role: "assistant", content: "", edited: false, reasoning: "" });
   const botIndex = conversation.length - 1;
   activeAssistantIndex = botIndex;
   updateStreamingUI();
@@ -1240,6 +1521,7 @@ async function sendMessage() {
     // Use passcode for Hack Club if set, otherwise require an API key
     const authToken = (provider === "hackclub" && passcode) ? passcode : key;
     if (!authToken) { showError(passcode ? "" : provider === "hackclub" ? "Enter a passcode in settings or an API key" : "Enter an API key first"); throw new Error("No auth"); }
+    if (!modelSelect.value) { showError("Select or add a model in Settings"); throw new Error("No model selected"); }
 
     const fetchHeaders = {
       "Content-Type": "application/json",
@@ -1272,6 +1554,7 @@ async function sendMessage() {
     const decoder = new TextDecoder();
     let buffer = "";
     let fullText = "";
+    let fullReasoning = conversation[botIndex].reasoning || "";
 
     while (true) {
       const { done, value } = await reader.read();
@@ -1289,20 +1572,32 @@ async function sendMessage() {
 
         try {
           const parsed = JSON.parse(data);
-          const delta = parsed.choices?.[0]?.delta?.content;
-          if (delta) {
-            if (!streamUpdateLocked) {
-              fullText += delta;
-              botContent.textContent = fullText;
-              conversation[botIndex].content = fullText;
-              chatArea.scrollTop = chatArea.scrollHeight;
-            }
+          const choice = parsed.choices?.[0] || {};
+          const deltaObj = choice.delta || {};
+          const contentDelta = extractContentDelta(deltaObj);
+          const reasoningDelta = extractReasoningDelta(deltaObj, choice);
+
+          if (!streamUpdateLocked && contentDelta) {
+            fullText += contentDelta;
+            botContent.textContent = fullText;
+            conversation[botIndex].content = fullText;
+            chatArea.scrollTop = chatArea.scrollHeight;
+          }
+
+          if (!streamUpdateLocked && reasoningDelta) {
+            fullReasoning += reasoningDelta;
+            conversation[botIndex].reasoning = fullReasoning;
+            updateReasoningPanel(botMsgEl, fullReasoning, false);
+            chatArea.scrollTop = chatArea.scrollHeight;
           }
         } catch {}
       }
     }
 
     conversation[botIndex].content = fullText;
+    if (conversation[botIndex].reasoning) {
+      updateReasoningPanel(botMsgEl, conversation[botIndex].reasoning, true);
+    }
 
   } catch (err) {
     typingIndicator.style.display = "none";
